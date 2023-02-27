@@ -1,14 +1,15 @@
 # importing libraries
+from model import NeuralNet
 import pygame
 import random
  
-speed = 15
+speed = 300
 spawn_rate_constant=50
 spawn_rate = spawn_rate_constant
  
 # Window size
-window_x = 720
-window_y = 480
+window_x = 1210
+window_y = 610
  
 # defining colors
 bgcolor = pygame.Color(23, 163, 91)
@@ -28,64 +29,70 @@ game_window = pygame.display.set_mode((window_x, window_y))
 fps = pygame.time.Clock()
  
 # defining snake default position
-snake_position = [100, 50]
+bibits = [NeuralNet()]
  
 # food position
 food_position = []
 food_position.append([random.randrange(1, (window_x//10)) * 10,
                   random.randrange(1, (window_y//10)) * 10])
  
- 
-# setting default snake direction towards
-# right
-direction = 'RIGHT'
- 
 
-def getState():
+def getState(pos):
     top_left = 0
     top_right = 0
     bottom_left = 0
     bottom_right = 0
 
     for position in  food_position:
-        if position[1]<snake_position[1] and position[0]<snake_position[0]:
-            top_left += 1/((snake_position[1]-position[1])**2 + (snake_position[0]-position[0])**2)
-        elif position[1]<snake_position[1] and position[0]>snake_position[0]:
-            top_right += 1/((snake_position[1]-position[1])**2 + (snake_position[0]-position[0])**2)
-        elif position[1]>snake_position[1] and position[0]<snake_position[0]:
-            bottom_left += 1/((snake_position[1]-position[1])**2 + (snake_position[0]-position[0])**2)
-        elif position[1]>snake_position[1] and position[0]>snake_position[0]:
-            bottom_right += 1/((snake_position[1]-position[1])**2 + (snake_position[0]-position[0])**2)
+        if position[1]<pos[1] and position[0]<pos[0]:
+            top_left += 1/((pos[1]-position[1])**2 + (pos[0]-position[0])**2)
+        elif position[1]<pos[1] and position[0]>pos[0]:
+            top_right += 1/((pos[1]-position[1])**2 + (pos[0]-position[0])**2)
+        elif position[1]>pos[1] and position[0]<pos[0]:
+            bottom_left += 1/((pos[1]-position[1])**2 + (pos[0]-position[0])**2)
+        elif position[1]>pos[1] and position[0]>pos[0]:
+            bottom_right += 1/((pos[1]-position[1])**2 + (pos[0]-position[0])**2)
 
-    wall_top = 1/(snake_position[1]-0)**2
-    wall_bottom = 1/(snake_position[1]-window_y)**2
-    wall_left = 1/(snake_position[0]-0)**2
-    wall_right = 1/(snake_position[0]-window_x)**2
+    wall_top = 1/(pos[1]+1)**2
+    wall_bottom = 1/(pos[1]-window_y+1)**2
+    wall_left = 1/(pos[0]+1)**2
+    wall_right = 1/(pos[0]-window_x+1)**2
     
     return [top_left,top_right,bottom_left,bottom_right,wall_top,wall_bottom,wall_left,wall_right]
 
-def game_step(direction):
-    global spawn_rate
-    score = 0
 
-    # Moving the snake
-    if direction == 'UP':
-        snake_position[1] -= 8
-    if direction == 'DOWN':
-        snake_position[1] += 8
-    if direction == 'LEFT':
-        snake_position[0] -= 8
-    if direction == 'RIGHT':
-        snake_position[0] += 8
+while True:
+
+    # Moving the bibits
+    for bibit in bibits:
+        pred = bibit.forward(getState(bibit.position))
+        direction = 3
+        temp = pred[direction]
+        for i,p in enumerate(pred):
+            if p>temp:
+                direction = i
+                temp = p
+            
+        if direction==0:
+            bibit.position[1] -= 8
+        elif direction==1:
+            bibit.position[1] += 8
+        elif direction==2:
+            bibit.position[0] -= 8
+        else:
+            bibit.position[0] += 8
+            
  
     # Snake body growing mechanism
     # if foods and snakes collide then scores
     # will be incremented by 8
-    for i,position in enumerate(food_position):
-        if (snake_position[0] - position[0])**2 + (snake_position[1] - position[1])**2 < 169:
-            score += 10
-            del(food_position[i])
-            break
+    for bibit in bibits:
+        for i,position in enumerate(food_position):
+            if (bibit.position[0] - position[0])**2 + (bibit.position[1] - position[1])**2 < 169:
+                bibit.score += 10
+                bibit.idlestate = 300
+                del(food_position[i])
+                break
     
          
     if 100-spawn_rate<0:
@@ -97,14 +104,25 @@ def game_step(direction):
          
     
     game_window.fill(bgcolor)
-     
-    pygame.draw.circle(game_window, green,snake_position, 8)
+    
+    for bibit in bibits:
+        pygame.draw.circle(game_window, green,bibit.position, 8)
     for position in food_position:
         pygame.draw.circle(game_window, white,position , 5)
- 
+    
     # Wall collide conditions
-    if snake_position[0] < 0 or snake_position[0] > window_x-10 or snake_position[1] < 0 or snake_position[1] > window_y-10:
-        score -= 10
+    print(len(bibits))
+    deathnote = []
+    for i,bibit in enumerate(bibits):
+        if bibit.idlestate==0 or bibit.position[0] < 0 or bibit.position[0] > window_x-10 or bibit.position[1] < 0 or bibit.position[1] > window_y-10:
+            bibit.score -= 10
+            if len(bibits)<30:
+                bibits.extend(bibit.mutate(((300-bibit.idlestate)/60)+1.5+bibit.score/10,mutation_power=0.001))
+            deathnote.append(i)
+
+    deathnote.reverse()
+    for bibit in deathnote:
+        del(bibits[bibit])
 
  
     # Refresh game screen
@@ -112,4 +130,7 @@ def game_step(direction):
  
     # Frame Per Second /Refresh Rate
     fps.tick(speed)
-    return score
+
+
+    for bibit in bibits:
+        bibit.idlestate -=1
